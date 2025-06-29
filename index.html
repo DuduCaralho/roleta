@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Roleta de Raridade</title>
+    <!-- Incluindo Tailwind CSS para um design moderno e responsivo -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* Estilos adicionais para garantir que a aplicação ocupe toda a tela */
+        html, body {
+            height: 100%;
+            margin: 0;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
+        /* Garantindo que o canvas não estoure a tela em dispositivos menores */
+        canvas {
+            max-width: 90vw;
+            max-height: 90vw;
+            aspect-ratio: 1 / 1;
+        }
+        /* Animação para o resultado aparecer suavemente */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex flex-col justify-center items-center min-h-screen p-4">
+
+    <!-- Container principal -->
+    <div class="w-full max-w-lg mx-auto text-center">
+
+        <!-- Título -->
+        <h1 class="text-4xl md:text-5xl font-bold mb-2 text-shadow">🎲 Roleta de Raridade 🎲</h1>
+        <p class="text-gray-400 mb-6">Clique no botão para descobrir sua sorte!</p>
+
+        <!-- Ponteiro da Roleta (seta fixa no topo) -->
+        <div class="relative flex justify-center items-center mb-4">
+             <div class="absolute -top-1 z-10 text-4xl" style="text-shadow: 0px 2px 4px rgba(0,0,0,0.5);">🔻</div>
+        </div>
+
+        <!-- Canvas da Roleta -->
+        <div class="relative flex justify-center items-center">
+            <canvas id="roulette-canvas" width="500" height="500" class="rounded-full shadow-2xl shadow-black/50"></canvas>
+        </div>
+
+        <!-- Botão para girar -->
+        <div class="mt-8">
+            <button id="spin-button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-10 rounded-full text-xl transition-all duration-300 ease-in-out shadow-lg hover:shadow-xl transform hover:scale-105 disabled:bg-gray-500 disabled:cursor-not-allowed disabled:transform-none">
+                Girar!
+            </button>
+        </div>
+
+        <!-- Área do Resultado -->
+        <div id="result-container" class="mt-8 h-16 flex justify-center items-center">
+             <!-- O resultado será inserido aqui pelo JavaScript -->
+        </div>
+
+    </div>
+
+    <script>
+        // --- Configurações da Roleta ---
+        const sectors = [
+            { label: "Mítico",   chance: 10,  color: "#9c27b0" },
+            { label: "Lendário", chance: 15, color: "#ffc107" },
+            { label: "Épico",    chance: 20, color: "#3f51b5" },
+            { label: "Raro",     chance: 25, color: "#03a9f4" },
+            { label: "Comum",    chance: 35, color: "#4caf50" }
+        ];
+
+        // --- Elementos do DOM ---
+        const canvas = document.getElementById("roulette-canvas");
+        const ctx = canvas.getContext("2d");
+        const spinButton = document.getElementById("spin-button");
+        const resultContainer = document.getElementById("result-container");
+
+        // --- Variáveis de Estado ---
+        let isSpinning = false;
+        let currentAngle = 0;
+        const radius = canvas.width / 2;
+        const TWO_PI = Math.PI * 2;
+
+        // Calcula o ângulo de cada setor baseado na sua chance
+        const totalChance = sectors.reduce((acc, s) => acc + s.chance, 0);
+        const sectorsWithAngles = sectors.map(sector => ({
+            ...sector,
+            angle: (sector.chance / totalChance) * TWO_PI
+        }));
+
+        // --- Funções ---
+
+        /**
+         * Desenha uma fatia da roleta (setor).
+         * @param {number} startAngle - Ângulo inicial da fatia.
+         * @param {object} sector - O objeto do setor contendo cor, label, etc.
+         */
+        function drawSector(startAngle, sector) {
+            const endAngle = startAngle + sector.angle;
+            
+            // Desenha a fatia colorida
+            ctx.beginPath();
+            ctx.moveTo(radius, radius);
+            ctx.arc(radius, radius, radius - 5, startAngle, endAngle);
+            ctx.closePath();
+            ctx.fillStyle = sector.color;
+            ctx.fill();
+            
+            // Desenha a borda da fatia
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Desenha o texto do setor
+            ctx.save();
+            ctx.translate(radius, radius);
+            ctx.rotate(startAngle + sector.angle / 2);
+            ctx.textAlign = "center";
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 16px Inter";
+            ctx.shadowColor = "black";
+            ctx.shadowBlur = 4;
+            ctx.fillText(sector.label, radius * 0.65, 10);
+            ctx.restore();
+        }
+
+        /**
+         * Desenha a roleta inteira, iterando sobre os setores.
+         */
+        function drawRoulette() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            let startAngle = 0;
+            sectorsWithAngles.forEach(sector => {
+                drawSector(startAngle, sector);
+                startAngle += sector.angle;
+            });
+        }
+        
+        /**
+         * Função de easing para a animação (desaceleração suave).
+         * @param {number} t - Progresso da animação (0 a 1).
+         * @returns {number} - Progresso ajustado pela função de easing.
+         */
+        function easeOutCubic(t) {
+            return 1 - Math.pow(1 - t, 4);
+        }
+
+        /**
+         * Loop de animação principal.
+         * @param {number} startTime - Timestamp de início da animação.
+         * @param {number} duration - Duração total da animação.
+         * @param {number} startAngle - Ângulo inicial da roleta.
+         * @param {number} totalRotation - Rotação total a ser percorrida.
+         */
+        function animateSpin(startTime, duration, startAngle, totalRotation) {
+            const currentTime = Date.now();
+            const elapsedTime = currentTime - startTime;
+
+            if (elapsedTime >= duration) {
+                // Fim da animação
+                currentAngle = (startAngle + totalRotation) % TWO_PI;
+                drawRouletteWithRotation();
+                showResult();
+                isSpinning = false;
+                spinButton.disabled = false;
+                return;
+            }
+
+            // Calcula o progresso e aplica o easing
+            const progress = elapsedTime / duration;
+            const easedProgress = easeOutCubic(progress);
+            
+            // Atualiza o ângulo atual
+            currentAngle = (startAngle + (totalRotation * easedProgress)) % TWO_PI;
+            
+            drawRouletteWithRotation();
+            
+            // Continua a animação no próximo frame
+            requestAnimationFrame(() => animateSpin(startTime, duration, startAngle, totalRotation));
+        }
+
+        /**
+         * Inicia o giro da roleta.
+         */
+        function handleSpin() {
+            if (isSpinning) return;
+
+            isSpinning = true;
+            spinButton.disabled = true;
+            resultContainer.innerHTML = ""; // Limpa o resultado anterior
+
+            // Calcula um destino aleatório e a rotação total
+            const randomStopAngle = Math.random() * TWO_PI;
+            const rotations = Math.random() * 5 + 8; // Entre 8 e 13 rotações
+            const totalRotation = (rotations * TWO_PI) + randomStopAngle;
+            const duration = 5000; // 5 segundos de animação
+            const startTime = Date.now();
+
+            requestAnimationFrame(() => animateSpin(startTime, duration, currentAngle, totalRotation));
+        }
+        
+        /**
+         * Redesenha a roleta aplicando a rotação atual.
+         */
+        function drawRouletteWithRotation() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(radius, radius);
+            ctx.rotate(currentAngle);
+            ctx.translate(-radius, -radius);
+            drawRoulette();
+            ctx.restore();
+        }
+
+        /**
+         * Calcula e exibe o resultado final.
+         */
+        function showResult() {
+            // O ponteiro está no topo (ângulo 270 graus ou 1.5 * PI em radianos).
+            // Precisamos descobrir qual setor está sob o ponteiro.
+            // A rotação `currentAngle` é horária. O cálculo `(1.5 * Math.PI) - currentAngle` nos dá o ângulo
+            // inicial do ponto que parou no topo. Normalizamos o resultado para ficar entre 0 e 2*PI.
+            const pointerAngle = (1.5 * Math.PI - (currentAngle % TWO_PI) + TWO_PI) % TWO_PI;
+
+            let accumulatedAngle = 0;
+            for (const sector of sectorsWithAngles) {
+                accumulatedAngle += sector.angle;
+                if (pointerAngle < accumulatedAngle) {
+                    displayResult(sector);
+                    return;
+                }
+            }
+        }
+        
+        /**
+         * Cria e mostra o elemento de texto do resultado.
+         * @param {object} sector - O setor vencedor.
+         */
+        function displayResult(sector) {
+            const resultElement = document.createElement('h2');
+            resultElement.textContent = `🎉 ${sector.label}! 🎉`;
+            resultElement.className = `text-3xl font-bold fade-in`;
+            resultElement.style.color = sector.color;
+            resultElement.style.textShadow = '0 0 10px rgba(255, 255, 255, 0.5)';
+            resultContainer.appendChild(resultElement);
+        }
+
+        // --- Event Listeners ---
+        spinButton.addEventListener("click", handleSpin);
+        
+        // --- Inicialização ---
+        window.onload = () => {
+             drawRoulette(); // Desenha a roleta na posição inicial
+        };
+    </script>
+
+</body>
+</html>
