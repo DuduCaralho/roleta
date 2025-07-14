@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Roleta de Raças - One Piece</title>
+    <!-- Tailwind CDN para estilos rápidos -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet" />
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+            background-color: #1a202c; /* bg-gray-900 */
+            color: white;
+        }
+        canvas {
+            max-width: 90vw;
+            max-height: 90vw;
+            aspect-ratio: 1 / 1;
+            border-radius: 50%;
+            box-shadow: 0 0 20px rgba(0,0,0,0.7);
+            background-color: #2d3748; /* bg-gray-700 */
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        /* Sombra do texto do título */
+        .text-shadow {
+            text-shadow: 0 2px 4px rgba(0,0,0,0.7);
+        }
+    </style>
+</head>
+<body class="flex flex-col justify-center items-center min-h-screen p-4">
+
+    <div class="w-full max-w-lg mx-auto text-center">
+        <h1 class="text-4xl md:text-5xl font-bold mb-2 text-shadow">🎲 Roleta de Raças - One Piece 🎲</h1>
+        <p class="text-gray-400 mb-6">Clique no botão para descobrir sua raça!</p>
+
+        <!-- Ponteiro fixo -->
+        <div class="relative flex justify-center items-center mb-4" style="height: 40px;">
+            <div class="absolute -top-1 z-10 text-4xl" style="text-shadow: 0px 2px 4px rgba(0,0,0,0.5);">🔻</div>
+        </div>
+
+        <!-- Canvas da roleta -->
+        <div class="relative flex justify-center items-center">
+            <canvas id="roulette-canvas" width="500" height="500"></canvas>
+        </div>
+
+        <!-- Botão girar -->
+        <div class="mt-8">
+            <button id="spin-button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-10 rounded-full text-xl transition-all duration-300 ease-in-out shadow-lg hover:shadow-xl transform hover:scale-105 disabled:bg-gray-500 disabled:cursor-not-allowed disabled:transform-none">
+                Girar!
+            </button>
+        </div>
+
+        <!-- Resultado -->
+        <div id="result-container" class="mt-8 h-24 flex flex-col justify-center items-center">
+            <!-- Resultado aparece aqui -->
+        </div>
+    </div>
+
+<script>
+    // --- Configurações da Roleta ---
+    const sectors = [
+        { label: "Humano",    chance: 40, color: "#4caf50", description: "Vilas costeiras e cidades portuárias" },
+        { label: "Tritão",    chance: 15, color: "#03a9f4", description: "Reinos submarinos e cavernas aquáticas" },
+        { label: "Mink",      chance: 10, color: "#ff9800", description: "Florestas tropicais com tempestades" },
+        { label: "Skypian",   chance: 8,  color: "#b3e5fc", description: "Ilhas flutuantes de nuvens sólidas" },
+        { label: "Oni",       chance: 7,  color: "#9c27b0", description: "Montanhas envoltas por neblina" },
+        { label: "Bucaneiro", chance: 5,  color: "#795548", description: "Prisões abandonadas e fortalezas em ruínas" },
+        { label: "Lunarian",  chance: 2,  color: "#f44336", description: "Ilhas flutuantes de nuvens sólidas" }
+    ];
+
+    // --- DOM ---
+    const canvas = document.getElementById("roulette-canvas");
+    const ctx = canvas.getContext("2d");
+    const spinButton = document.getElementById("spin-button");
+    const resultContainer = document.getElementById("result-container");
+
+    // --- Estado ---
+    let isSpinning = false;
+    let currentAngle = 0;
+    const radius = canvas.width / 2;
+    const TWO_PI = Math.PI * 2;
+
+    // Calcula ângulo de cada setor
+    const totalChance = sectors.reduce((acc, s) => acc + s.chance, 0);
+    const sectorsWithAngles = sectors.map(sector => ({
+        ...sector,
+        angle: (sector.chance / totalChance) * TWO_PI
+    }));
+
+    // Desenha um setor
+    function drawSector(startAngle, sector) {
+        const endAngle = startAngle + sector.angle;
+
+        // Fatia colorida
+        ctx.beginPath();
+        ctx.moveTo(radius, radius);
+        ctx.arc(radius, radius, radius - 5, startAngle, endAngle);
+        ctx.closePath();
+        ctx.fillStyle = sector.color;
+        ctx.fill();
+
+        // Borda branca
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Texto do setor
+        ctx.save();
+        ctx.translate(radius, radius);
+        ctx.rotate(startAngle + sector.angle / 2);
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 16px Inter";
+        ctx.shadowColor = "black";
+        ctx.shadowBlur = 4;
+        ctx.fillText(sector.label, radius * 0.65, 10);
+        ctx.restore();
+    }
+
+    // Desenha a roleta completa (sem rotação)
+    function drawRoulette() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        let startAngle = 0;
+        sectorsWithAngles.forEach(sector => {
+            drawSector(startAngle, sector);
+            startAngle += sector.angle;
+        });
+    }
+
+    // Desenha a roleta com rotação atual
+    function drawRouletteWithRotation() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.save();
+        ctx.translate(radius, radius);
+        ctx.rotate(currentAngle);
+        ctx.translate(-radius, -radius);
+        drawRoulette();
+        ctx.restore();
+    }
+
+    // Função easing para desaceleração suave
+    function easeOutCubic(t) {
+        return 1 - Math.pow(1 - t, 4);
+    }
+
+    // Animação do giro
+    function animateSpin(startTime, duration, startAngle, totalRotation) {
+        const currentTime = Date.now();
+        const elapsedTime = currentTime - startTime;
+
+        if (elapsedTime >= duration) {
+            currentAngle = (startAngle + totalRotation) % TWO_PI;
+            drawRouletteWithRotation();
+            showResult();
+            isSpinning = false;
+            spinButton.disabled = false;
+            return;
+        }
+
+        const progress = elapsedTime / duration;
+        const easedProgress = easeOutCubic(progress);
+
+        currentAngle = (startAngle + (totalRotation * easedProgress)) % TWO_PI;
+        drawRouletteWithRotation();
+
+        requestAnimationFrame(() => animateSpin(startTime, duration, startAngle, totalRotation));
+    }
+
+    // Inicia o giro
+    function handleSpin() {
+        if (isSpinning) return;
+
+        isSpinning = true;
+        spinButton.disabled = true;
+        resultContainer.innerHTML = "";
+
+        const randomStopAngle = Math.random() * TWO_PI;
+        const rotations = Math.random() * 5 + 8; // 8 a 13 voltas
+        const totalRotation = (rotations * TWO_PI) + randomStopAngle;
+        const duration = 5000; // 5 segundos
+        const startTime = Date.now();
+
+        requestAnimationFrame(() => animateSpin(startTime, duration, currentAngle, totalRotation));
+    }
+
+    // Calcula e exibe o resultado
+    function showResult() {
+        // Ponteiro está no topo (270 graus = 1.5 * PI)
+        const pointerAngle = (1.5 * Math.PI - (currentAngle % TWO_PI) + TWO_PI) % TWO_PI;
+
+        let accumulatedAngle = 0;
+        for (const sector of sectorsWithAngles) {
+            accumulatedAngle += sector.angle;
+            if (pointerAngle < accumulatedAngle) {
+                displayResult(sector);
+                return;
+            }
+        }
+    }
+
+    // Mostra o resultado no DOM
+    function displayResult(sector) {
+        const title = document.createElement('h2');
+        title.textContent = `🎉 ${sector.label}! 🎉`;
+        title.className = "text-3xl font-bold fade-in";
+        title.style.color = sector.color;
+        title.style.textShadow = '0 0 10px rgba(255, 255, 255, 0.5)';
+
+        const desc = document.createElement('p');
+        desc.textContent = sector.description;
+        desc.className = "text-lg mt-2 text-gray-300 fade-in";
+
+        resultContainer.appendChild(title);
+        resultContainer.appendChild(desc);
+    }
+
+    // Eventos
+    spinButton.addEventListener("click", handleSpin);
+
+    // Inicializa a roleta
+    window.onload = () => {
+        drawRoulette();
+    };
+</script>
+
+</body>
+</html>
